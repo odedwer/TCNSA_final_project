@@ -47,8 +47,8 @@ class Network:
     def run_second_stage(self):
         self.coef[Network.EXPLICIT + 1:] = np.random.uniform(9, 10, self.p - 1)
 
-    def u_dynamics(self):
-        pass
+    def u_dynamics(self, value):
+        return -value + self.g * (self.W @ value)
 
     def firing_rate_dynamics(self):
         pass
@@ -56,8 +56,25 @@ class Network:
     def w_dynamics(self):
         pass
 
-    def euler_iterator(self,initial_value,func,):
-        pass
+    def euler_iterator(self, initial_value, func, noise_func=None):
+        if noise_func:
+            def iterator():
+                cur_val = initial_value
+                sqrt_dt = np.sqrt(Network.dt)
+                t = 0
+                while True:
+                    cur_val += Network.dt * func(cur_val, t) + sqrt_dt * noise_func()
+                    t += Network.dt
+                    yield cur_val
+        else:
+            def iterator():
+                cur_val = initial_value
+                t = 0
+                while True:
+                    cur_val += Network.dt * func(cur_val, t)
+                    t += Network.dt
+                    yield cur_val
+        return iterator
 
     def noise_dynamics(self):
         pass
