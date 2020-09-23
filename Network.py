@@ -6,18 +6,19 @@ class Network:
     EXPLICIT = 0
     dt = 1e-3
 
-    def __init__(self, N, p, A_p, A_m, g, tao_p=50, tao_m=100, tao=5, tao_0=2 * 1e5, noise=None,
+    def __init__(self, N, p, A_p, A_m, g, gamma, tao_p=50, tao_m=100, tao=5, tao_0=2 * 1e5, noise=None,
                  stdp_kernel=None, max_time=10000, seed=None):
         # initializing parameters
         self.N = N
+        self.p = p
         self.A_p = A_p
         self.A_m = A_m
+        self.g = g
+        self.gamma = gamma
         self.tao_p = tao_p
         self.tao_m = tao_m
         self.tao = tao
         self.tao_0 = tao_0
-        self.g = g
-        self.p = p
         self.noise = noise
         # either use a given function as STDP kernel, or the one in the paper
         self.stdp_kernel = lambda delta_t: (self.A_p * (np.exp(delta_t / self.tao_p))) if delta_t < 0 else (
@@ -48,12 +49,9 @@ class Network:
         self.coef[Network.EXPLICIT + 1:] = np.random.uniform(9, 10, self.p - 1)
 
     def u_dynamics(self, value):
-        return -value + self.g * (self.W @ value)
+        return (-value + self.g * (self.W @ value)) / self.tao
 
-    def firing_rate_dynamics(self):
-        pass
-
-    def w_dynamics(self):
+    def w_dynamics(self, f_t, t):
         pass
 
     def euler_iterator(self, initial_value, func, noise_func=None):
