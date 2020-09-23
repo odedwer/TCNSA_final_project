@@ -50,11 +50,12 @@ class Network:
     def run_second_stage(self):
         self.coef[Network.EXPLICIT + 1:] = np.random.uniform(9, 10, self.p - 1)
 
-    def delta_u_dynamics(self, value):
-        return (-value + self.g * (self.W @ value)) / self.tao
+    def delta_u_dynamics(self, value,with_noise=False):
+        return (-value + self.g * (self.W @ value)+(np.random.normal(0,self.noise,self.N) if with_noise else 0)) / self.tao
+
+    def u_pert_dynamics(self, f_t, t):
 
     def w_dynamics(self, f_t, t):
-
         pass
 
     def euler_iterator(self, initial_value, func, noise_func=None):
