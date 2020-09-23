@@ -62,12 +62,12 @@ class Network:
     def w_dynamics(self, f_t, t):
         pass
 
-    def euler_iterator(self, initial_value, func, noise_func=None):
+    def euler_iterator(self, initial_value, func,t0=0, noise_func=None):
         if noise_func:
             def iterator():
                 cur_val = initial_value
                 sqrt_dt = np.sqrt(Network.dt)
-                t = 0
+                t = t0
                 while True:
                     cur_val += Network.dt * func(cur_val, t) + sqrt_dt * noise_func()
                     t += Network.dt
@@ -75,7 +75,7 @@ class Network:
         else:
             def iterator():
                 cur_val = initial_value
-                t = 0
+                t = t0
                 while True:
                     cur_val += Network.dt * func(cur_val, t)
                     t += Network.dt
