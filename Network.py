@@ -55,8 +55,8 @@ class Network:
     def run_second_stage(self):
         self.coef[Network.EXPLICIT + 1:] = np.random.uniform(9, 10, self.p - 1)
 
-    def delta_u_dynamics(self, value,with_noise=False):
-        return (-value + self.g * (self.W @ value)+(np.random.normal(0,self.noise,self.N) if with_noise else 0)) / self.tao
+    def delta_u_dynamics(self, value,with_noise=False,t_greater_then_zero=False):
+        return (-value + self.g * (self.W @ value)+(np.random.normal(0,self.noise,self.N) if with_noise else 0)) / self.tao if t_greater_then_zero else 0.
 
 
     def w_dynamics(self, f_t, t):
