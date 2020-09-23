@@ -57,8 +57,13 @@ class Network:
     def w_dynamics(self):
         pass
 
-    def euler_iterator(self,initial_value,func,):
-        pass
+    def euler_iterator(self,initial_value,func,dt):
+        def itterator():
+            t=0
+            while(True):
+
+                yield initial_value + dt*func(t)
+        return itterator
 
     def noise_dynamics(self):
         pass
