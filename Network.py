@@ -2,9 +2,9 @@ import numpy as np
 from scipy.integrate import quad
 from scipy.optimize import fsolve
 
+
 class Network:
     EXPLICIT = 0
-    dt = 1e-3
 
     def __init__(self, N, p, A_p, A_m, g, gamma, F, tao_p=50, tao_m=100, tao=5, tao_0=2 * 1e5, noise=None,
                  stdp_kernel=None, max_time=10000, seed=None):
@@ -21,9 +21,9 @@ class Network:
         self.tao = tao
         self.tao_0 = tao_0
         self.noise = noise
+        self.dt = min(tao_p, tao_m, tao, tao_0) / 1000.
         # either use a given function as STDP kernel, or the one in the paper
-        self.stdp_kernel = lambda delta_t: (self.A_p * (np.exp(delta_t / self.tao_p))) if delta_t < 0 else (
-                self.A_m * (np.exp(-delta_t / self.tao_m))) if not stdp_kernel else stdp_kernel
+        self.stdp_kernel = self.default_stdp_kernel if stdp_kernel is None else stdp_kernel
 
         # set the length of the second stage simulation
         self.max_time = max_time
@@ -36,51 +36,79 @@ class Network:
 
         # is computationally inefficient to randomize orthogonal sign vectors
         self.coef = np.zeros(self.p)  # the strength of every memory pattern
+        self.coef[Network.EXPLICIT] = np.random.rand(1)  # init the explicit pattern strength
         self.coef_history = None
-        self.coef[Network.EXPLICIT] = np.random.rand(1)
         self.P = (1.0 / self.N) * np.dstack(
             [x * y for x, y in
              [np.meshgrid(self.memory_patterns[i], self.memory_patterns[i]) for i in range(self.p)]]).T
 
         self.W = np.sum(self.coef[:, np.newaxis, np.newaxis] * self.P, axis=0)
-        self.__overall_int_of_k=0.1
-        self.delta_k_long=-self.A_m*self.tao_m-self.A_p*self.tao_p+self.__overall_int_of_k
+        self.__overall_int_of_k = 0.1
+        self.delta_k_long = -self.A_m * self.tao_m - self.A_p * self.tao_p + self.__overall_int_of_k
         self.find_f()
+
+    def default_stdp_kernel(self, delta_t):
+        A = np.full_like(delta_t, self.A_m)
+        tao_arr = np.full_like(delta_t, self.tao_m)
+        negative = delta_t < 0
+        A[negative] = self.A_p
+        tao_arr[negative] = self.tao_p
+        return A * np.exp((-negative.astype(np.int)) * delta_t / tao_arr)
+
     def find_f(self):
-        self.b=fsolve(lambda b:self.F(self.gamma*(b**3)*self.__overall_int_of_k)-b,np.ndarray([1]))[0]
-        self.f =self.b * self.memory_patterns[Network.EXPLICIT]
+        self.b = fsolve(lambda b: self.F(self.gamma * (b ** 3) * self.__overall_int_of_k) - b, np.ndarray([1]))[0]
+        self.f = self.b * self.memory_patterns[Network.EXPLICIT]
+
     def run_first_stage(self):
         explicit_pattern = self.memory_patterns[Network.EXPLICIT]
 
     def run_second_stage(self):
         self.coef[Network.EXPLICIT + 1:] = np.random.uniform(9, 10, self.p - 1)
 
-    def delta_u_dynamics(self, value,with_noise=False,t_greater_then_zero=False):
-        return (-value + self.g * (self.W @ value)+(np.random.normal(0,self.noise,self.N) if with_noise else 0)) / self.tao if t_greater_then_zero else 0.
+    def delta_u_dynamics(self, value, t, with_noise=True):
+        return (-value + self.g * (self.W @ value) + (
+            np.random.normal(0, self.noise / np.sqrt(self.dt),
+                             self.N) if with_noise else 0)) / self.tao
+        # scaling by 1/sqrt(dt) so that when performing the euler method for ODE (multiplying by dt),
+        # the noise will be scaled by sqrt(dt) - to get the euler-maruyama method
 
+    def w_dynamics(self, delta_u, t):
+        """
 
-    def w_dynamics(self, f_t, t):
-        pass
+        :param delta_u: array of delta_u per timestep, timestep rows and N columns
+        :return:
+        """
+        Ks_pre = self.stdp_kernel(np.linspace(0, t, delta_u.shape[0]) - t)
+        delta_u_int_pre = self.f * t + self.g * np.sum(Ks_pre[:, np.newaxis] * delta_u, axis=0) * self.dt
+        Ks_post = self.stdp_kernel(t - np.linspace(0, t, delta_u.shape[0]))
+        delta_u_int_post = self.f * t + self.g * np.sum(Ks_post[:, np.newaxis] * delta_u, axis=0) * self.dt
+        return -self.W + self.gamma * np.outer(self.f + self.g * delta_u[-1], delta_u_int_pre) + self.gamma * np.outer(
+            self.f + self.g * delta_u[-1], delta_u_int_post)
 
-    def euler_iterator(self, initial_value, func,t0=0, noise_func=None):
-        if noise_func:
-            def iterator():
-                cur_val = initial_value
-                sqrt_dt = np.sqrt(Network.dt)
-                t = t0
-                while True:
-                    cur_val += Network.dt * func(cur_val, t) + sqrt_dt * noise_func()
-                    t += Network.dt
-                    yield cur_val
-        else:
-            def iterator():
-                cur_val = initial_value
-                t = t0
-                while True:
-                    cur_val += Network.dt * func(cur_val, t)
-                    t += Network.dt
-                    yield cur_val
+    def euler_iterator(self, initial_value, func, t0=0):
+        def iterator(args=None) -> np.array:
+            cur_val = initial_value
+            t = t0
+            while True:
+                cur_val += self.dt * func(cur_val, t, args) if args is not None else func(cur_val, t)
+                t += self.dt
+                yield cur_val
+
         return iterator
 
-    def noise_dynamics(self):
-        pass
+    def run_first_phase(self):
+        delta_u = np.zeros((1, self.N))
+        dWdt = np.array([np.inf])
+        t = self.dt
+        i = 0
+        while (dWdt > self.dt * 1e-20).any() and i < 10000:
+            print(i)
+            delta_u = np.vstack(
+                [delta_u, delta_u[-1] + self.dt * self.delta_u_dynamics(delta_u[-1], t, with_noise=False)])
+            dWdt = self.dt * self.w_dynamics(delta_u, t)
+            self.W += dWdt
+            t += self.dt
+            i += 1
+        print(i)
+        print(dWdt)
+
