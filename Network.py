@@ -3,11 +3,10 @@ import numpy as np
 
 class Network:
     EXPLICIT = 0
-    STABLE_WIDTH = 1000
     dt = 1e-3
 
-    def __init__(self, N, p, A_p, A_m, g, tao_p=50, tao_m=100, tao=5, tao_0=2 * 1e5, noise=None, stdp_kernel=None,
-                 T=10000, seed=None):
+    def __init__(self, N, p, A_p, A_m, g, tao_p=50, tao_m=100, tao=5, tao_0=2 * 1e5, noise=None,
+                 stdp_kernel=None, max_time=10000, seed=None):
         # initializing parameters
         self.N = N
         self.A_p = A_p
@@ -22,13 +21,18 @@ class Network:
         # either use a given function as STDP kernel, or the one in the paper
         self.stdp_kernel = lambda delta_t: (self.A_p * (np.exp(delta_t / self.tao_p))) if delta_t < 0 else (
                 self.A_m * (np.exp(-delta_t / self.tao_m))) if not stdp_kernel else stdp_kernel
+
         # set the length of the second stage simulation
-        self.T = T
+        self.max_time = max_time
         # randomize patterns
-        self.memory_patterns = 2 * np.random.binomial(1, .5, (self.p, self.N)) - 1  # do they need to be orthogonal? it
-        # is computationally inefficient to randomize orthogonal sign vectors
         if seed:
             np.random.seed(seed)
+        self.memory_patterns = 2 * np.eye(self.N)[:p,
+                                   :] - 1  # TODO:2 * np.random.binomial(1, .5, (self.p, self.N)) - 1
+        # do they need to be orthogonal? it
+
+        # is computationally inefficient to randomize orthogonal sign vectors
+        self.coef = np.zeros(self.p)  # the strength of every memory pattern
         # the strength of every memory pattern
         self.coef = np.zeros(self.p)
         self.coef_history = None
@@ -39,14 +43,22 @@ class Network:
         self.W = np.sum(self.coef[:, np.newaxis, np.newaxis] * self.P, axis=0)
 
     def run_first_stage(self):
-        # should run the network until it stabilizes. perhaps save MSE of W over steps for X steps
-        # and wait until all are close to 0
-        weight_mse = np.full(Network.STABLE_WIDTH, np.inf)
-        running_index = 0
-        last_W = self.W.copy()
-        u = self.memory_patterns[Network.EXPLICIT]
-        while not np.allclose(weight_mse, 0):
-            pass
+        explicit_pattern = self.memory_patterns[Network.EXPLICIT]
 
     def run_second_stage(self):
         self.coef[Network.EXPLICIT + 1:] = np.random.uniform(9, 10, self.p - 1)
+
+    def u_dynamics(self):
+        pass
+
+    def firing_rate_dynamics(self):
+        pass
+
+    def w_dynamics(self):
+        pass
+
+    def euler_iterator(self,initial_value,func,):
+        pass
+
+    def noise_dynamics(self):
+        pass
