@@ -6,7 +6,7 @@ class Network:
     EXPLICIT = 0
     dt = 1e-3
 
-    def __init__(self, N, p, A_p, A_m, g, gamma, tao_p=50, tao_m=100, tao=5, tao_0=2 * 1e5, noise=None,
+    def __init__(self, N, p, A_p, A_m, g, gamma, F, tao_p=50, tao_m=100, tao=5, tao_0=2 * 1e5, noise=None,
                  stdp_kernel=None, max_time=10000, seed=None):
         # initializing parameters
         self.N = N
@@ -14,6 +14,7 @@ class Network:
         self.A_p = A_p
         self.A_m = A_m
         self.g = g
+        self.F = F
         self.gamma = gamma
         self.tao_p = tao_p
         self.tao_m = tao_m
@@ -40,6 +41,7 @@ class Network:
         self.P = (1.0 / self.N) * np.dstack(
             [x * y for x, y in
              [np.meshgrid(self.memory_patterns[i], self.memory_patterns[i]) for i in range(self.p)]]).T
+
         self.W = np.sum(self.coef[:, np.newaxis, np.newaxis] * self.P, axis=0)
 
     def run_first_stage(self):
@@ -48,10 +50,11 @@ class Network:
     def run_second_stage(self):
         self.coef[Network.EXPLICIT + 1:] = np.random.uniform(9, 10, self.p - 1)
 
-    def u_dynamics(self, value):
+    def delta_u_dynamics(self, value):
         return (-value + self.g * (self.W @ value)) / self.tao
 
     def w_dynamics(self, f_t, t):
+
         pass
 
     def euler_iterator(self, initial_value, func, noise_func=None):
