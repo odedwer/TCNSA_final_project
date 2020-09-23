@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.integrate import quad
-
+from scipy.optimize import fsolve
 
 class Network:
     EXPLICIT = 0
@@ -43,7 +43,12 @@ class Network:
              [np.meshgrid(self.memory_patterns[i], self.memory_patterns[i]) for i in range(self.p)]]).T
 
         self.W = np.sum(self.coef[:, np.newaxis, np.newaxis] * self.P, axis=0)
-
+        self.__overall_int_of_k=0.1
+        self.delta_k_long=-self.A_m*self.tao_m-self.A_p*self.tao_p+self.__overall_int_of_k
+        self.find_f()
+    def find_f(self):
+        self.b=fsolve(lambda b:self.F(self.gamma*(b**3)*self.__overall_int_of_k)-b,np.ndarray([1]))[0]
+        self.f =self.b * self.memory_patterns[Network.EXPLICIT]
     def run_first_stage(self):
         explicit_pattern = self.memory_patterns[Network.EXPLICIT]
 
@@ -53,7 +58,6 @@ class Network:
     def delta_u_dynamics(self, value,with_noise=False):
         return (-value + self.g * (self.W @ value)+(np.random.normal(0,self.noise,self.N) if with_noise else 0)) / self.tao
 
-    def u_pert_dynamics(self, f_t, t):
 
     def w_dynamics(self, f_t, t):
         pass
