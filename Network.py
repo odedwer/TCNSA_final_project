@@ -29,6 +29,7 @@ class Network:
         # is computationally inefficient to randomize orthogonal sign vectors
         if seed:
             np.random.seed(seed)
+        # the strength of every memory pattern
         self.coef = np.zeros(self.p)
         self.coef_history = None
         self.coef[Network.EXPLICIT] = np.random.rand(1)
