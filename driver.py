@@ -4,7 +4,7 @@ import matplotlib.pylab as plt
 import scipy.linalg as linalg
 
 # %%
-network = Network(512, 4, 2, -1.2, 0.1, 9000e-1, lambda x: np.power(x, 3), 50, 100, 5, 2e5, 0.1118, seed=97)
+network = Network(256, 4, 2, -1.2, 0.1, 9000e-1, lambda x: np.power(x, 3), 50, 100, 5, 2e5, 0.1118, seed=97)
 # %%
 first_W = network.W.copy()
 

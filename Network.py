@@ -85,9 +85,9 @@ class Network:
         """
         Ks = np.vstack([self.stdp_kernel(np.linspace(0, t, delta_u.shape[0]) - t), self.stdp_kernel(
             t - np.linspace(0, t, delta_u.shape[0]))])
-        delta_u_int = (self.f * t + self.g * (Ks @ delta_u) * self.dt)
+        delta_u_int = ((Ks @ (self.f+self.g*delta_u)) * self.dt)
         outer = self.gamma * np.outer(delta_u_int, self.f + self.g * delta_u[-1])
-        return (-self.W + outer[0].T + outer[1].T)/self.tao_0
+        return (-self.W + outer[0].T + outer[1])/self.tao_0
 
     def euler_iterator(self, initial_value, func, t0=0):
         def iterator(args=None) -> np.array:
@@ -106,10 +106,10 @@ class Network:
         coefs = np.zeros((5000, self.P.shape[0]))
         t = self.dt
         i = 0
-        while (dWdt > self.dt * 1e-30).any() and i < 5000:
+        while (dWdt > self.dt * 1e-20).any() and i < 5000:
             print(i)
             delta_u = np.vstack(
-                [delta_u, delta_u[-1] + self.dt * self.delta_u_dynamics(delta_u[-1], t, with_noise=False)])
+                [delta_u, delta_u[-1] + self.dt * self.delta_u_dynamics(delta_u[-1], t, with_noise=True)])
             dWdt = self.dt * self.w_dynamics(delta_u, t)
             self.W += dWdt
             t += self.dt
