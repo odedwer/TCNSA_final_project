@@ -36,14 +36,14 @@ class Network:
 
         # is computationally inefficient to randomize orthogonal sign vectors
         self.coef = np.zeros(self.p)  # the strength of every memory pattern
-        self.coef[Network.EXPLICIT] = np.random.rand(1)  # init the explicit pattern strength
+        self.coef[Network.EXPLICIT] = 9.5  # np.random.rand(1)  # init the explicit pattern strength
         self.coef_history = None
         self.P = (1.0 / self.N) * np.dstack(
             [x * y for x, y in
              [np.meshgrid(self.memory_patterns[i], self.memory_patterns[i]) for i in range(self.p)]]).T
 
         self.W = np.sum(self.coef[:, np.newaxis, np.newaxis] * self.P, axis=0)
-        self.__overall_int_of_k = 0.1
+        self.__overall_int_of_k = 1.2
         self.delta_k_long = -self.A_m * self.tao_m - self.A_p * self.tao_p + self.__overall_int_of_k
         self.find_f()
 
@@ -61,16 +61,16 @@ class Network:
         negative = delta_t < 0
         A[negative] = self.A_p
         tao_arr[negative] = self.tao_p
-        return A * np.exp((-negative.astype(np.int)) * delta_t / tao_arr)
+        return A * np.exp(-np.abs(delta_t) / tao_arr)
 
     def find_f(self):
-        self.b = fsolve(lambda b: self.F(self.gamma * (b ** 3) * self.__overall_int_of_k) - b, np.ndarray([1]))[0]
-        self.f = self.b * self.memory_patterns[Network.EXPLICIT]
+        self.b = fsolve(lambda b: self.F(self.gamma * (b ** 3) * self.__overall_int_of_k) - b, 100.)[0]
+        self.f = self.memory_patterns[Network.EXPLICIT] * self.b
 
     def run_second_stage(self):
         self.coef[Network.EXPLICIT + 1:] = np.random.uniform(9, 10, self.p - 1)
 
-    def delta_u_dynamics(self, value, t, with_noise=True):
+    def delta_u_dynamics(self, value, t, with_noise=False):
         return (-value + self.g * (self.W @ value) + (
             np.random.normal(0, self.noise / np.sqrt(self.dt),
                              self.N) if with_noise else 0)) / self.tao
@@ -85,9 +85,9 @@ class Network:
         """
         Ks = np.vstack([self.stdp_kernel(np.linspace(0, t, delta_u.shape[0]) - t), self.stdp_kernel(
             t - np.linspace(0, t, delta_u.shape[0]))])
-        delta_u_int = self.f * t + self.g * (Ks @ delta_u) * self.dt
+        delta_u_int = (self.f * t + self.g * (Ks @ delta_u) * self.dt)
         outer = self.gamma * np.outer(delta_u_int, self.f + self.g * delta_u[-1])
-        return -self.W + outer[0].T + outer[1].T
+        return (-self.W + outer[0].T + outer[1].T)/self.tao_0
 
     def euler_iterator(self, initial_value, func, t0=0):
         def iterator(args=None) -> np.array:
@@ -101,16 +101,20 @@ class Network:
         return iterator
 
     def run_first_phase(self):
-        delta_u = np.zeros((1, self.N))
+        delta_u = np.full((1, self.N), 0)
         dWdt = np.array([np.inf])
+        coefs = np.zeros((5000, self.P.shape[0]))
         t = self.dt
         i = 0
-        while (dWdt > self.dt * 1e-10).any() and i < 10000:
+        while (dWdt > self.dt * 1e-30).any() and i < 5000:
+            print(i)
             delta_u = np.vstack(
                 [delta_u, delta_u[-1] + self.dt * self.delta_u_dynamics(delta_u[-1], t, with_noise=False)])
             dWdt = self.dt * self.w_dynamics(delta_u, t)
             self.W += dWdt
             t += self.dt
+            coefs[i, :] = self.P[:, 0, :] @ self.W[:, 0] / self.P[:, 0, 0]
             i += 1
         print(i)
         print(dWdt)
+        return np.vstack([self.coef,coefs])

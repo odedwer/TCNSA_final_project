@@ -1,15 +1,19 @@
 from Network import *
 from time import time
+import matplotlib.pylab as plt
 import scipy.linalg as linalg
 
 # %%
-network = Network(512, 4, 2, -1.2, 0.1, 9000e-1, np.tanh, 50, 100, 5, 2e5, 0.1118)
+network = Network(512, 4, 2, -1.2, 0.1, 9000e-1, lambda x: np.power(x, 3), 50, 100, 5, 2e5, 0.1118, seed=97)
 # %%
 first_W = network.W.copy()
 
 start = time()
-network.run_first_phase()
-overall = (time() - start)/60.
+coefs = network.run_first_phase()
+overall = (time() - start) / 60.
+# %%
+plt.figure()
+plt.plot(coefs)
 # %%
 network.W - first_W
 # %%
@@ -17,7 +21,11 @@ W = network.W
 P = network.P
 # %%
 c1 = ((network.P[0, 0, :] @ network.W[:, 0]) / network.P[0, 0, 0])
-
+c2 = ((network.P[1, 0, :] @ network.W[:, 0]) / network.P[1, 0, 0])
+c3 = ((network.P[2, 0, :] @ network.W[:, 0]) / network.P[2, 0, 0])
+c4 = ((network.P[3, 0, :] @ network.W[:, 0]) / network.P[3, 0, 0])
+# %%
+c = ((network.P[:, 0, :] @ first_W[:, 0]) / network.P[:, 0, 0])
 # %%
 t = 2
 N = 5
