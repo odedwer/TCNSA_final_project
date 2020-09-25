@@ -1,19 +1,25 @@
+from NetworkSlow import *
 from Network import *
 from time import time
 import matplotlib.pylab as plt
 import scipy.linalg as linalg
 
 # %%
-network = Network(512, 4, 2, -1.2, 0.1, 9000e-1, lambda x: np.power(x, 3), 50, 100, 5, 2e5, 0.1118, seed=97)
+# networkS = NetworkSlow(32, 4, 2, -1.2, 0.1, 9000e-1, np.tanh, 50, 100, 5, 2e5, 0.1118, seed=97)
+networkF = Network(512, 4, 2, -1.2, 0.1, 1/9000., np.tanh, 50, 100, 5, 2e5, 0.1118, seed=97)
 # %%
-first_W = network.W.copy()
+# first_W_S = networkS.W.copy()
 
-start = time()
-coefs, delta_u = network.run_first_phase()
-overall = (time() - start) / 60.
+# coefs_S, delta_u_S = networkS.run_first_phase()
+#%%
+first_W_F = networkF.W.copy()
+
+coefs_F, delta_u_F = networkF.run_first_phase()
 # %%
 plt.figure()
-plt.plot(coefs)
+plt.plot(coefs_F,label='F')
+# plt.plot(coefs_S,label='S')
+plt.legend()
 # %%
 network.W - first_W
 # %%
@@ -49,8 +55,8 @@ for i in range(N):
 # %%
 c = np.vstack([Ksp, Ksm])
 c_sum = c @ delta_u
-c_outer = np.outer(c_sum, delta_u[-1])
-c_outer.shape = (2, c_outer.shape[0] // 2, c_outer.shape[1])
+c_outer0 = np.outer(delta_u[-1],c_sum[0,:]).T
+c_outer1 = np.outer(delta_u[-1],c_sum[1,:])
 # %%
 c_outer[1].T == Ksm_outer
 # %%
