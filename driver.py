@@ -1,22 +1,29 @@
-from NetworkSlow import *
-from Network import *
+import Network as net
+import numpy as np
 from time import time
 import matplotlib.pylab as plt
 import scipy.linalg as linalg
-
+from importlib import reload
+#%%
+reload(net)
 # %%
 # networkS = NetworkSlow(32, 4, 2, -1.2, 0.1, 9000e-1, np.tanh, 50, 100, 5, 2e5, 0.1118, seed=97)
-networkF = Network(1024, 2, 2, -1.2, 0.1, 1, np.tanh, 50, 100, 5, 2e5, 0.1118, seed=97)
-# %%
-first_W_F = networkF.W.copy()
+networkF = net.Network(8, 2, 2, -1.2, 0.1, 1, np.tanh, 5, 10, .5, 500, 1.1118, seed=97)
 
-coefs_F, delta_u_F = networkF.run_first_phase()
+# %%
+# first_W_F = networkF.W.copy()
+
+coefs_F, delta_u_F = networkF.run_first_phase(with_noise=False)
 # %%
 plt.figure()
 plt.plot(coefs_F, label='F')
 plt.legend()
 # %%
-network.W - first_W
+coefs2, delta_u2 = networkF.run_second_phase(70, 71, True, 1000)
+#%%
+plt.figure()
+plt.plot(networkF.coef_history, label='F')
+plt.legend()
 # %%
 W = network.W
 P = network.P

@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.integrate import quad
 from scipy.optimize import fsolve
+from tqdm import tqdm
 
 
 class Network:
@@ -22,7 +23,7 @@ class Network:
         self.tao = tao
         self.tao_0 = tao_0
         self.noise = noise
-        self.dt = 1e-3
+        self.dt = 1e-1
         # either use a given function as STDP kernel, or the one in the paper
         self.stdp_kernel = self.default_stdp_kernel if stdp_kernel is None else stdp_kernel
         self.current_time = 0.
@@ -65,7 +66,7 @@ class Network:
         return A * np.exp(-np.abs(delta_t) / tao_arr) + self.kl_kernel(delta_t)
 
     def kl_kernel(self, delta_t):
-        return np.exp(-np.abs(delta_t) / 10)
+        return np.exp(-np.abs(delta_t) / np.abs(self.A_m * self.tao_m + self.A_p * self.tao_p))
 
     def pre_first_stdp_kernel(self, delta_t):
         return self.A_p * np.exp(delta_t / self.tao_p)
@@ -106,56 +107,59 @@ class Network:
 
     def run_first_phase(self, LIMIT=None, with_noise=False):
         if LIMIT is None:
-            LIMIT = int(self.tao_0 * 10) / self.dt
+            LIMIT = int(self.tao_0 * 4) / self.dt
         print(f"LIMIT={LIMIT}")
         delta_u = np.full((1, self.N), 0)
         coefs = np.zeros((1, self.P.shape[0]))
         coefs[0, :] = self.coef
         i = 0
         coef_diff = np.inf
-        while np.abs(coef_diff) > 1e-20 and i < LIMIT:
+        while i < LIMIT:
             delta_u = np.vstack(
-                [delta_u, delta_u[-1, :] + self.dt * self.delta_u_dynamics(delta_u[-1], t, with_noise=with_noise)])
+                [delta_u, delta_u[-1, :] + self.dt * self.delta_u_dynamics(delta_u[-1], self.current_time,
+                                                                           with_noise=with_noise)])
             self.W += self.dt * self.w_dynamics(delta_u, self.current_time)
             self.current_time += self.dt
             i += 1
             coefs = np.vstack([coefs, self.P[:, 0, :] @ self.W[:, 0] / self.P[:, 0, 0]])
             coef_diff = coefs[i, Network.EXPLICIT] - coefs[i - 1, Network.EXPLICIT]
-        print(i)
-        return np.vstack([self.coef, coefs]), delta_u
+            if i % 100 == 0:
+                print(i)
+        self.coef[:] = coefs[i, :]
+        return coefs, delta_u
 
-    def run_second_phase(self, pattern, delta_u, implicit_introduction_time=1, with_noise=False, LIMIT=None):
-        if LIMIT is None:
-            LIMIT = 20000
-        coefs = np.zeros((LIMIT + 1, self.P.shape[0]))
-        coefs[0, :] = self.coef
-        self.current_time = self.dt
-        i = 0
-
-        if isinstance(pattern, list):
-            pattern = sum(pattern)
-
-        self.f += (pattern * self.b)
-        for j in range(implicit_introduction_time):
-            delta_u = np.vstack(
-                [delta_u,
-                 delta_u[-1] + self.dt * self.delta_u_dynamics(delta_u[-1], self.current_time, with_noise=with_noise)])
-            self.W += self.dt * self.w_dynamics(delta_u, self.current_time)
+    def run_second_phase(self, min_pattern_strength, max_pattern_strength, with_noise=False, max_time=None,
+                         explicit_pattern=None):
+        if max_time is None:
+            max_time = 10000
+        max_iteration = int(max_time / self.dt)
+        if explicit_pattern is None:
+            explicit_pattern = Network.EXPLICIT
+        if self.coef_history is None:
+            self.coef_history = np.zeros((max_iteration + 1, self.P.shape[0]))
+            self.coef_history[0, :] = self.coef
+            iteration_range = range(1, max_iteration)
+            self.coef[np.arange(self.p) != explicit_pattern] = np.random.uniform(min_pattern_strength,
+                                                                                 max_pattern_strength,
+                                                                                 self.p - 1)
+            self.W = np.sum(self.coef[:, np.newaxis, np.newaxis] * self.P, axis=0)
+            self.delta_u = np.random.normal(0, self.noise, (1,self.N))
+        else:
+            first_row_index = self.coef_history.shape[0]
+            self.coef_history = np.vstack([self.coef_history, np.zeros((max_iteration + 1, self.P.shape[0]))])
+            self.coef_history[first_row_index, :] = self.coef
+            iteration_range = range(first_row_index, first_row_index + max_iteration)
+        self.f = self.b * self.memory_patterns[explicit_pattern]
+        self.current_time += self.dt
+        self.W = np.sum(self.coef[:, np.newaxis, np.newaxis] * self.P, axis=0)
+        for i in tqdm(iteration_range):
+            self.delta_u = np.vstack([self.delta_u,
+                                      self.delta_u[-1] + self.dt * self.delta_u_dynamics(self.delta_u[-1],
+                                                                                         self.current_time,
+                                                                                         with_noise=with_noise)])
+            self.W += self.dt * self.w_dynamics(self.delta_u, self.current_time)
             self.current_time += self.dt
             i += 1
-            coefs[i, :] = self.P[:, 0, :] @ self.W[:, 0] / self.P[:, 0, 0]
-            coef_diff = np.abs(coefs[i, Network.EXPLICIT] - coefs[i - 1, Network.EXPLICIT])
-        self.f -= (pattern * self.b)
-
-        coef_diff = np.inf
-        while coef_diff > 1e-10 and i < LIMIT:
-            print(i)
-            delta_u = np.vstack(
-                [delta_u,
-                 delta_u[-1] + self.dt * self.delta_u_dynamics(delta_u[-1], self.current_time, with_noise=with_noise)])
-            self.W += self.dt * self.w_dynamics(delta_u, self.current_time)
-            self.current_time += self.dt
-            i += 1
-            coefs[i, :] = self.P[:, 0, :] @ self.W[:, 0] / self.P[:, 0, 0]
-            coef_diff = np.abs(coefs[i, Network.EXPLICIT] - coefs[i - 1, Network.EXPLICIT])
-        return np.vstack([self.coef, coefs]), delta_u
+            self.coef_history[i, :] = self.P[:, 0, :] @ self.W[:, 0] / self.P[:, 0, 0]
+        self.coef = self.coef_history[-1, :]
+        return self.coef_history.copy(), self.delta_u.copy()
