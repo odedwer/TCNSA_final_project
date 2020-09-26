@@ -91,7 +91,7 @@ class Network:
         """
         firing_rates = self.f + self.g * delta_u
         Ks = np.vstack(
-            [self.pre_first_stdp_kernel(np.linspace(0, t, delta_u.shape[0]) - t), self.post_first_stdp_kernel(
+            [self.stdp_kernel(np.linspace(0, t, delta_u.shape[0]) - t), self.stdp_kernel(
                 t - np.linspace(0, t, delta_u.shape[0]))])
         delta_u_int = ((Ks @ firing_rates) * self.dt)
         outer0 = self.gamma * np.outer(firing_rates[-1, :], delta_u_int[0, :]).T
