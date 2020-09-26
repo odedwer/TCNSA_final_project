@@ -7,7 +7,7 @@ class Network:
     EXPLICIT = 0
     WIDTH = 1000
 
-    def __init__(self, N, p, A_p, A_m, g, gamma, F, tao_p=50, tao_m=100, tao=5, tao_0=2e3, noise=None,
+    def __init__(self, N, p, A_p, A_m, g, gamma, F, tao_p=50, tao_m=100, tao=5, tao_0=2 * 1e5, noise=None,
                  stdp_kernel=None, seed=None):
         # initializing parameters
         self.N = N
@@ -22,10 +22,10 @@ class Network:
         self.tao = tao
         self.tao_0 = tao_0
         self.noise = noise
-        self.dt = 2e-1
+        self.dt = 1e-3
         # either use a given function as STDP kernel, or the one in the paper
         self.stdp_kernel = self.default_stdp_kernel if stdp_kernel is None else stdp_kernel
-
+        self.current_time = 0.
         # randomize patterns
         if seed:
             np.random.seed(seed)
@@ -99,32 +99,63 @@ class Network:
         Ks = np.vstack(
             [self.stdp_kernel(np.linspace(0, t, delta_u.shape[0]) - t), self.stdp_kernel(
                 t - np.linspace(0, t, delta_u.shape[0]))])
-        # Ks = np.vstack([np.exp(-np.linspace(0, t, delta_u.shape[0])), np.exp(-np.linspace(0, t, delta_u.shape[0]))])
         delta_u_int = ((Ks @ firing_rates) * self.dt)
         outer0 = self.gamma * np.outer(firing_rates[-1, :], delta_u_int[0, :]).T
         outer1 = self.gamma * np.outer(firing_rates[-1, :], delta_u_int[1, :])
         return (-self.W + outer0 + outer1) / self.tao_0
-        # return (-self.W + 1)#/self.tao_0
 
-    def run_first_phase(self, LIMIT=None):
+    def run_first_phase(self, LIMIT=None, with_noise=False):
         if LIMIT is None:
             LIMIT = int(self.tao_0 * 10) / self.dt
         print(f"LIMIT={LIMIT}")
         delta_u = np.full((1, self.N), 0)
         coefs = np.zeros((1, self.P.shape[0]))
         coefs[0, :] = self.coef
-        t = self.dt
         i = 0
         coef_diff = np.inf
-        while np.abs(coef_diff)>1e-20 and i < LIMIT:
+        while np.abs(coef_diff) > 1e-20 and i < LIMIT:
             delta_u = np.vstack(
-                [delta_u, delta_u[-1, :] + self.dt * self.delta_u_dynamics(delta_u[-1], t, with_noise=False)])
-            dwdt = self.dt * self.w_dynamics(delta_u, t)
-            self.W += dwdt
-            t += self.dt
+                [delta_u, delta_u[-1, :] + self.dt * self.delta_u_dynamics(delta_u[-1], t, with_noise=with_noise)])
+            self.W += self.dt * self.w_dynamics(delta_u, self.current_time)
+            self.current_time += self.dt
             i += 1
             coefs = np.vstack([coefs, self.P[:, 0, :] @ self.W[:, 0] / self.P[:, 0, 0]])
             coef_diff = coefs[i, Network.EXPLICIT] - coefs[i - 1, Network.EXPLICIT]
-            if not i % 100:
-                print(i)
+        print(i)
+        return np.vstack([self.coef, coefs]), delta_u
+
+    def run_second_phase(self, pattern, delta_u, implicit_introduction_time=1, with_noise=False, LIMIT=None):
+        if LIMIT is None:
+            LIMIT = 20000
+        coefs = np.zeros((LIMIT + 1, self.P.shape[0]))
+        coefs[0, :] = self.coef
+        self.current_time = self.dt
+        i = 0
+
+        if isinstance(pattern, list):
+            pattern = sum(pattern)
+
+        self.f += (pattern * self.b)
+        for j in range(implicit_introduction_time):
+            delta_u = np.vstack(
+                [delta_u,
+                 delta_u[-1] + self.dt * self.delta_u_dynamics(delta_u[-1], self.current_time, with_noise=with_noise)])
+            self.W += self.dt * self.w_dynamics(delta_u, self.current_time)
+            self.current_time += self.dt
+            i += 1
+            coefs[i, :] = self.P[:, 0, :] @ self.W[:, 0] / self.P[:, 0, 0]
+            coef_diff = np.abs(coefs[i, Network.EXPLICIT] - coefs[i - 1, Network.EXPLICIT])
+        self.f -= (pattern * self.b)
+
+        coef_diff = np.inf
+        while coef_diff > 1e-10 and i < LIMIT:
+            print(i)
+            delta_u = np.vstack(
+                [delta_u,
+                 delta_u[-1] + self.dt * self.delta_u_dynamics(delta_u[-1], self.current_time, with_noise=with_noise)])
+            self.W += self.dt * self.w_dynamics(delta_u, self.current_time)
+            self.current_time += self.dt
+            i += 1
+            coefs[i, :] = self.P[:, 0, :] @ self.W[:, 0] / self.P[:, 0, 0]
+            coef_diff = np.abs(coefs[i, Network.EXPLICIT] - coefs[i - 1, Network.EXPLICIT])
         return np.vstack([self.coef, coefs]), delta_u
