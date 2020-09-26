@@ -35,17 +35,17 @@ class Network:
 
         # is computationally inefficient to randomize orthogonal sign vectors
         self.coef = np.zeros(self.p)  # the strength of every memory pattern
-        # self.coef[Network.EXPLICIT] = 1.2  # np.random.rand(1)  # init the explicit pattern strength
         self.coef_history = None
         self.P = (1.0 / self.N) * np.dstack(
             [x * y for x, y in
              [np.meshgrid(self.memory_patterns[i], self.memory_patterns[i]) for i in range(self.p)]]).T
-        self.__overall_int_of_k = 0.1
-        self.delta_k_long = -self.A_p*self.tao_p-self.A_m*self.tao_m+self.__overall_int_of_k
-        self.find_f()
-        self.coef[Network.EXPLICIT] = self.gamma*(self.b**2)*self.N*(self.__overall_int_of_k) # np.random.rand(1)  # init the explicit pattern strength
-        self.W = np.sum(self.coef[:, np.newaxis, np.newaxis] * self.P, axis=0)
 
+        self.__overall_int_of_k = 0.1
+        self.delta_k_long = -self.A_p * self.tao_p - self.A_m * self.tao_m + self.__overall_int_of_k
+        self.find_f()
+        self.coef[Network.EXPLICIT] = self.gamma * (
+                self.b ** 2) * self.N * self.__overall_int_of_k  # np.random.rand(1)  # init the explicit pattern strength
+        self.W = np.sum(self.coef[:, np.newaxis, np.newaxis] * self.P, axis=0)
 
     def init_memory_patterns(self):
         self.memory_patterns[0] = 2 * np.random.binomial(1, .5, self.N) - 1
@@ -62,6 +62,12 @@ class Network:
         A[negative] = self.A_p
         tao_arr[negative] = self.tao_p
         return A * np.exp(-np.abs(delta_t) / tao_arr)
+
+    def pre_first_stdp_kernel(self, delta_t):
+        return self.A_p * np.exp(delta_t / self.tao_p)
+
+    def post_first_stdp_kernel(self, delta_t):
+        return self.A_m * np.exp(-delta_t / self.tao_m)
 
     def find_f(self):
         self.b = fsolve(lambda b: self.F(self.gamma * (b ** 3) * self.__overall_int_of_k) - 1, 10.)[0]#todo change beack to b
@@ -90,29 +96,19 @@ class Network:
         # inf_int1 = (np.sum(np.outer(Ks_m_infty[1], self.f), axis=0) * self.dt)[:, np.newaxis]
         # inf_outer1 = (inf_int1 @ self.f[np.newaxis, :] * self.gamma).T
 
-        Ks = np.vstack([self.stdp_kernel(np.linspace(0, t-self.dt, delta_u.shape[0]-1) - t), self.stdp_kernel(
-            t - np.linspace(0, t-self.dt, delta_u.shape[0]-1))])
-        delta_u_int = ((Ks @ (self.f + self.g * delta_u[:-1,:])) * self.dt)
-        outer0 = self.gamma * np.outer(self.f + self.g * delta_u[-1, :], delta_u_int[0, :]).T
-        outer1 = self.gamma * np.outer(self.f + self.g * delta_u[-1, :], delta_u_int[1, :])
-        return (-self.W + +outer0 +outer1) / self.tao_0
+        firing_rates = self.f + self.g * delta_u
+        Ks = np.vstack(
+            [self.stdp_kernel(np.linspace(0, t, delta_u.shape[0]) - t), self.stdp_kernel(
+                t - np.linspace(0, t, delta_u.shape[0]))])
+        delta_u_int = ((Ks @ firing_rates) * self.dt)
+        outer0 = self.gamma * np.outer(firing_rates[-1, :], delta_u_int[0, :]).T
+        outer1 = self.gamma * np.outer(firing_rates[-1, :], delta_u_int[1, :])
+        return (-self.W + outer0 + outer1) / self.tao_0
 
-    def euler_iterator(self, initial_value, func, t0=0):
-        def iterator(args=None) -> np.array:
-            cur_val = initial_value
-            t = t0
-            while True:
-                cur_val += self.dt * func(cur_val, t, args) if args is not None else func(cur_val, t)
-                t += self.dt
-                yield cur_val
-
-        return iterator
-
-    def run_first_phase(self,with_noise=False,LIMIT=2000):
+    def run_first_phase(self,,LIMIT=2000):
         delta_u = np.full((1, self.N), 0)
         coefs = np.zeros((LIMIT + 1, self.P.shape[0])) #todo change to final time of running.
         coefs[0, :] = self.coef
-        self.current_time = self.dt
         i = 0
         coef_diff = np.inf
         while i<LIMIT:

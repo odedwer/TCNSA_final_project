@@ -5,7 +5,11 @@ import scipy.linalg as linalg
 
 # %%
 # networkS = NetworkSlow(32, 4, 2, -1.2, 0.1, 9000e-1, np.tanh, 50, 100, 5, 2e5, 0.1118, seed=97)
-networkF = Network(8, 3,2, -1.2, 0.1, 1/9000.,lambda x: x, 50, 100, 5, 2e5, 0.1118, seed=97)
+networkF = Network(512, 4, 2, -1.2, 0.1, 1/9000., np.tanh, 50, 100, 5, 2e5, 0.1118, seed=97)
+# %%
+# first_W_S = networkS.W.copy()
+
+# coefs_S, delta_u_S = networkS.run_first_phase()
 #%%
 first_W_F = networkF.W.copy()
 
@@ -19,8 +23,8 @@ coefs_F_2, delta_u_F = networkF.run_second_phase(networkF.memory_patterns[1],del
 coefs_F= np.vstack([coefs_F,coefs_F_2])
 # %%
 plt.figure()
-plt.plot(coefs_F)
-# plt.plot(coefs_S,label='S')
+plt.plot(coefs_F, label='F')
+plt.legend()
 # %%
 network.W - first_W
 # %%
