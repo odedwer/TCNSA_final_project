@@ -6,19 +6,14 @@ import scipy.linalg as linalg
 
 # %%
 # networkS = NetworkSlow(32, 4, 2, -1.2, 0.1, 9000e-1, np.tanh, 50, 100, 5, 2e5, 0.1118, seed=97)
-networkF = Network(512, 4, 2, -1.2, 0.1, 1/9000., np.tanh, 50, 100, 5, 2e5, 0.1118, seed=97)
+networkF = Network(32, 4, 2, -1.2, 0.1,1/900., lambda x: x ** 2, 50, 100, 5, 2e5, 0.1118, seed=97)
 # %%
-# first_W_S = networkS.W.copy()
-
-# coefs_S, delta_u_S = networkS.run_first_phase()
-#%%
 first_W_F = networkF.W.copy()
 
 coefs_F, delta_u_F = networkF.run_first_phase()
 # %%
 plt.figure()
-plt.plot(coefs_F,label='F')
-# plt.plot(coefs_S,label='S')
+plt.plot(coefs_F, label='F')
 plt.legend()
 # %%
 network.W - first_W
@@ -55,8 +50,8 @@ for i in range(N):
 # %%
 c = np.vstack([Ksp, Ksm])
 c_sum = c @ delta_u
-c_outer0 = np.outer(delta_u[-1],c_sum[0,:]).T
-c_outer1 = np.outer(delta_u[-1],c_sum[1,:])
+c_outer0 = np.outer(delta_u[-1], c_sum[0, :]).T
+c_outer1 = np.outer(delta_u[-1], c_sum[1, :])
 # %%
 c_outer[1].T == Ksm_outer
 # %%
