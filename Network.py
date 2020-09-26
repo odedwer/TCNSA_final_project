@@ -23,6 +23,7 @@ class Network:
         self.tao_0 = tao_0
         self.noise = noise
         self.dt = min(tao_p, tao_m, tao, tao_0) / 10.
+        self.delta_u=None
         # either use a given function as STDP kernel, or the one in the paper
         self.stdp_kernel = self.default_stdp_kernel if stdp_kernel is None else stdp_kernel
         self.current_time=0.
@@ -105,24 +106,25 @@ class Network:
         outer1 = self.gamma * np.outer(firing_rates[-1, :], delta_u_int[1, :])
         return (-self.W + outer0 + outer1) / self.tao_0
 
-    def run_first_phase(self,,LIMIT=2000):
-        delta_u = np.full((1, self.N), 0)
+    def run_first_phase(self,LIMIT=2000,with_noise=False):
+        if self.delta_u is None:
+            self.delta_u = np.full((1, self.N), 0) #todo put it up.
         coefs = np.zeros((LIMIT + 1, self.P.shape[0])) #todo change to final time of running.
         coefs[0, :] = self.coef
         i = 0
         coef_diff = np.inf
         while i<LIMIT:
             print(i)
-            delta_u = np.vstack(
-                [delta_u, delta_u[-1] + self.dt * self.delta_u_dynamics(delta_u[-1], self.current_time, with_noise=with_noise)])
-            dw = self.w_dynamics(delta_u, self.current_time)
+            self.delta_u = np.vstack(
+                [self.delta_u, self.delta_u[-1] + self.dt * self.delta_u_dynamics(self.delta_u[-1], self.current_time, with_noise=with_noise)])
+            dw = self.w_dynamics(self.delta_u, self.current_time)
             self.W += self.dt * dw
             self.current_time += self.dt
             i += 1
             coefs[i, :] = self.P[:, 0, :] @ self.W[:, 0] / self.P[:, 0, 0] #todo here is the problem?
             coef_diff = np.abs(coefs[i, Network.EXPLICIT] - coefs[i - 1, Network.EXPLICIT])
         print(i)
-        return np.vstack([self.coef, coefs]), delta_u
+        return np.vstack([self.coef, coefs])
 
 
     def run_second_phase(self, pattern,delta_u, implicit_introduction_time=1, with_noise=False,LIMIT=2000):
