@@ -7,7 +7,7 @@ class Network:
     EXPLICIT = 0
     WIDTH = 1000
 
-    def __init__(self, N, p, A_p, A_m, g, gamma, F, tao_p=50, tao_m=100, tao=5, tao_0=2 * 1e5, noise=None,
+    def __init__(self, N, p, A_p, A_m, g, gamma, F, tao_p=50, tao_m=100, tao=5, tao_0=2e3, noise=None,
                  stdp_kernel=None, seed=None):
         # initializing parameters
         self.N = N
@@ -22,7 +22,7 @@ class Network:
         self.tao = tao
         self.tao_0 = tao_0
         self.noise = noise
-        self.dt = 1e-3
+        self.dt = 2e-1
         # either use a given function as STDP kernel, or the one in the paper
         self.stdp_kernel = self.default_stdp_kernel if stdp_kernel is None else stdp_kernel
 
@@ -40,11 +40,12 @@ class Network:
             [x * y for x, y in
              [np.meshgrid(self.memory_patterns[i], self.memory_patterns[i]) for i in range(self.p)]]).T
 
-        self.__overall_int_of_k = 0.1
-        self.delta_k_long = -self.A_p * self.tao_p - self.A_m * self.tao_m + self.__overall_int_of_k
+        self.__overall_int_of_k = 10
+        # self.delta_k_long = -self.A_p * self.tao_p - self.A_m * self.tao_m + self.__overall_int_of_k
+        self.delta_k_long = quad(self.kl_kernel, -np.inf, np.inf)[0]
         self.find_f()
         self.coef[Network.EXPLICIT] = self.gamma * (
-                self.b ** 2) * self.N * self.__overall_int_of_k  # np.random.rand(1)  # init the explicit pattern strength
+                self.b ** 2) * self.N * (self.A_p * self.tao_p + self.A_m * self.tao_m + 20)
         self.W = np.sum(self.coef[:, np.newaxis, np.newaxis] * self.P, axis=0)
 
     def init_memory_patterns(self):
@@ -61,7 +62,10 @@ class Network:
         negative = delta_t < 0
         A[negative] = self.A_p
         tao_arr[negative] = self.tao_p
-        return A * np.exp(-np.abs(delta_t) / tao_arr)
+        return A * np.exp(-np.abs(delta_t) / tao_arr) + self.kl_kernel(delta_t)
+
+    def kl_kernel(self, delta_t):
+        return np.exp(-np.abs(delta_t) / 10)
 
     def pre_first_stdp_kernel(self, delta_t):
         return self.A_p * np.exp(delta_t / self.tao_p)
@@ -70,7 +74,9 @@ class Network:
         return self.A_m * np.exp(-delta_t / self.tao_m)
 
     def find_f(self):
-        self.b = fsolve(lambda b: self.F(self.gamma * (b ** 3) * self.__overall_int_of_k) - b, 100.)[0]
+        self.b = fsolve(
+            lambda b: self.gamma * (b ** 2) * (self.A_m * self.tao_m + self.A_p * self.tao_p + self.delta_k_long) - 1,
+            100.)[0]
         self.f = self.memory_patterns[Network.EXPLICIT] * self.b
 
     def run_second_stage(self):
@@ -93,29 +99,32 @@ class Network:
         Ks = np.vstack(
             [self.stdp_kernel(np.linspace(0, t, delta_u.shape[0]) - t), self.stdp_kernel(
                 t - np.linspace(0, t, delta_u.shape[0]))])
+        # Ks = np.vstack([np.exp(-np.linspace(0, t, delta_u.shape[0])), np.exp(-np.linspace(0, t, delta_u.shape[0]))])
         delta_u_int = ((Ks @ firing_rates) * self.dt)
         outer0 = self.gamma * np.outer(firing_rates[-1, :], delta_u_int[0, :]).T
         outer1 = self.gamma * np.outer(firing_rates[-1, :], delta_u_int[1, :])
         return (-self.W + outer0 + outer1) / self.tao_0
+        # return (-self.W + 1)#/self.tao_0
 
-    def run_first_phase(self):
-        LIMIT = 20000
+    def run_first_phase(self, LIMIT=None):
+        if LIMIT is None:
+            LIMIT = int(self.tao_0 * 10) / self.dt
+        print(f"LIMIT={LIMIT}")
         delta_u = np.full((1, self.N), 0)
         coefs = np.zeros((1, self.P.shape[0]))
         coefs[0, :] = self.coef
         t = self.dt
         i = 0
         coef_diff = np.inf
-        while np.abs(coef_diff) > self.dt * 1e-10 and i < LIMIT:
-            print(f"round: {i}, diff: {coef_diff:.8f}")
+        while np.abs(coef_diff)>1e-20 and i < LIMIT:
             delta_u = np.vstack(
                 [delta_u, delta_u[-1, :] + self.dt * self.delta_u_dynamics(delta_u[-1], t, with_noise=False)])
             dwdt = self.dt * self.w_dynamics(delta_u, t)
-            print(dwdt)
             self.W += dwdt
             t += self.dt
             i += 1
             coefs = np.vstack([coefs, self.P[:, 0, :] @ self.W[:, 0] / self.P[:, 0, 0]])
             coef_diff = coefs[i, Network.EXPLICIT] - coefs[i - 1, Network.EXPLICIT]
-        print(i)
+            if not i % 100:
+                print(i)
         return np.vstack([self.coef, coefs]), delta_u

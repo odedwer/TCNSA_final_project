@@ -6,7 +6,7 @@ import scipy.linalg as linalg
 
 # %%
 # networkS = NetworkSlow(32, 4, 2, -1.2, 0.1, 9000e-1, np.tanh, 50, 100, 5, 2e5, 0.1118, seed=97)
-networkF = Network(32, 4, 2, -1.2, 0.1,1/900., lambda x: x ** 2, 50, 100, 5, 2e5, 0.1118, seed=97)
+networkF = Network(1024, 2, 2, -1.2, 0.1, 1, np.tanh, 50, 100, 5, 2e5, 0.1118, seed=97)
 # %%
 first_W_F = networkF.W.copy()
 
