@@ -21,8 +21,8 @@ class Network:
         self.tao_m = tao_m
         self.tao = tao
         self.tao_0 = tao_0
-        self.noise = noise
-        self.dt = 2.5
+        self.noise = noise  # * (np.sqrt(self.N) / np.sqrt(1024))
+        self.dt = 1.
         self.second_phase_flag = False
         # either use a given function as STDP kernel, or the one in the paper
         self.stdp_kernel = self.default_stdp_kernel if stdp_kernel is None else stdp_kernel
@@ -48,6 +48,12 @@ class Network:
         self.coef[Network.EXPLICIT] = self.gamma * (
                 self.b ** 2) * self.N * (self.A_p * self.tao_p + self.A_m * self.tao_m + self.delta_k_long)
         self.W = np.sum(self.coef[:, np.newaxis, np.newaxis] * self.P, axis=0)
+
+    # def get_noise_level(self):
+    #     upper_noise_bound = (self.tao * (self.b ** 2)) / (self.g ** 2)
+    #     lower_noise_bound = max((1. / (self.gamma * (self.g ** 3) * self.A_p)) * (self.tao / (self.tao_p ** 2)),
+    #                             (1. / (self.gamma * (self.g ** 3) * self.A_m)) * (self.tao / (self.tao_m ** 2)))
+    #     self.noise = (upper_noise_bound + lower_noise_bound) / 2.
 
     def init_memory_patterns(self):
         self.memory_patterns[0] = 2 * np.random.binomial(1, .5, self.N) - 1
@@ -76,7 +82,7 @@ class Network:
 
     def find_f(self):
         self.b = fsolve(
-            lambda b: self.gamma * (b ** 2) * (self.A_m * self.tao_m + self.A_p * self.tao_p + self.delta_k_long) - 1,
+            lambda b: self.gamma * (b ** 3) * (self.A_m * self.tao_m + self.A_p * self.tao_p + self.delta_k_long) - 1,
             100.)[0]  # TODO: make sure this is the correct linearization
         self.f = self.memory_patterns[Network.EXPLICIT] * self.b
 
@@ -84,9 +90,10 @@ class Network:
         self.coef[Network.EXPLICIT + 1:] = np.random.uniform(9, 10, self.p - 1)
 
     def delta_u_dynamics(self, value, t, with_noise=False):
-        return (-value + self.g * (self.W @ value) + (
+        a = (-value + self.g * (self.W @ value) + (
             np.random.normal(0, self.noise / np.sqrt(self.dt),
                              self.N) if with_noise else 0)) / self.tao
+        return a
         # return (-value + self.g * (self.W @ value) + (
         #     np.random.normal(0, self.noise, self.N) if with_noise else 0)) / self.tao
         # scaling by 1/sqrt(dt) so that when performing the euler method for ODE (multiplying by dt),
@@ -142,14 +149,14 @@ class Network:
             self.coef[np.arange(self.p) != explicit_pattern] = np.random.uniform(min_pattern_strength,
                                                                                  max_pattern_strength,
                                                                                  self.p - 1)
-            self.coef_history = np.zeros((max_iteration + 1, self.P.shape[0]))
+            self.coef_history = np.zeros((max_iteration, self.P.shape[0]))
             self.coef_history[0, :] = self.coef
             iteration_range = range(1, max_iteration)
             self.W = np.sum(self.coef[:, np.newaxis, np.newaxis] * self.P, axis=0)
             self.delta_u = np.random.normal(0, self.noise, (1, self.N)) if with_noise else np.zeros((1, self.N))
         else:
             first_row_index = self.coef_history.shape[0]
-            self.coef_history = np.vstack([self.coef_history, np.zeros((max_iteration + 1, self.P.shape[0]))])
+            self.coef_history = np.vstack([self.coef_history, np.zeros((max_iteration, self.P.shape[0]))])
             self.coef_history[first_row_index, :] = self.coef
             iteration_range = range(first_row_index, first_row_index + max_iteration)
         self.f = self.b * self.memory_patterns[explicit_pattern]
@@ -162,7 +169,6 @@ class Network:
                                                                                          with_noise=with_noise)])
             self.W += self.dt * self.w_dynamics(self.delta_u, self.current_time)
             self.current_time += self.dt
-            i += 1
             self.coef_history[i, :] = self.P[:, 0, :] @ self.W[:, 0] / self.P[:, 0, 0]
         self.coef = self.coef_history[-1, :]
         return self.coef_history.copy(), self.delta_u.copy()
