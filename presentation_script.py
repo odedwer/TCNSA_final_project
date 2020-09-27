@@ -21,9 +21,6 @@ def plot(data, title=None, xlabel=None, ylabel=None, save_name=None, labels=None
 
 # %% Figure 1 - Network with one explicit pattern and one implicit pattern in the case of no noise
 network = net.Network(256, 2, 2, -1.2, 0.1, 9000., 50, 100, 5, 2e3, seed=97)
-# %%
-coef, delta_u = network.run_first_phase()
-
-# %%
+coef, delta_u = network.run_first_phase(with_noise=False)
 plot(coef, title="Network with one explicit pattern and one implicit pattern in the case of no noise",
-     xlabel="time (ms)", ylabel="$c_a$ - pattern strength",labels=["explicit","implicit"])
+     xlabel="time (ms)", ylabel="$c_a$ - pattern strength", labels=["explicit", "implicit"])

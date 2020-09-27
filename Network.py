@@ -87,6 +87,8 @@ class Network:
         return (-value + self.g * (self.W @ value) + (
             np.random.normal(0, self.noise / np.sqrt(self.dt),
                              self.N) if with_noise else 0)) / self.tao
+        # return (-value + self.g * (self.W @ value) + (
+        #     np.random.normal(0, self.noise, self.N) if with_noise else 0)) / self.tao
         # scaling by 1/sqrt(dt) so that when performing the euler method for ODE (multiplying by dt),
         # the noise will be scaled by sqrt(dt) - to get the euler-maruyama method
 

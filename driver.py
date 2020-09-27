@@ -4,27 +4,27 @@ from time import time
 import matplotlib.pylab as plt
 import scipy.linalg as linalg
 from importlib import reload
-
+from email_by_demand import send_mail
 # %%
 reload(net)
 # %%
 # networkS = NetworkSlow(32, 4, 2, -1.2, 0.1, 9000e-1, np.tanh, 50, 100, 5, 2e5, 0.1118, seed=97)
-networkF = net.Network(16, 2, 2, -1.2, 0.1, 9000., 50, 100, 5, 2e4, 0.1118, seed=97)
+networkF = net.Network(8, 2, 2, -1.2, 0.1, 9000., 50, 100, 5, 2e4, 0.1118/128, seed=97)
 
 # %%
 # first_W_F = networkF.W.copy()
 
-coefs_F, delta_u_F = networkF.run_first_phase(with_noise=False)
-# %%
+coefs_F, delta_u_F = networkF.run_first_phase(with_noise=True)
 plt.figure()
 plt.plot(coefs_F, label='F')
 plt.legend()
-# %%
-coefs2, delta_u2 = networkF.run_second_phase(9, 9.5, True, 2000)
+coefs2, delta_u2 = networkF.run_second_phase(9.8, 9.8, True, 3000)
+send_mail("oded.wertheimer@mail.huji.ac.il","finito!","done")
 # %%
 plt.figure()
-plt.plot(networkF.coef_history, label='F')
+plt.plot(coefs2[2:,:], label='F')
 plt.legend()
+
 # %%
 W = network.W
 P = network.P
