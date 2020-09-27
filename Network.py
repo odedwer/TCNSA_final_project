@@ -21,8 +21,8 @@ class Network:
         self.tao_m = tao_m
         self.tao = tao
         self.tao_0 = tao_0
-        self.noise = noise  # * (np.sqrt(self.N) / np.sqrt(1024))
-        self.dt = 1.
+        self.noise = noise * (np.sqrt(self.N) / np.sqrt(1024))
+        self.dt = 0.5
         self.second_phase_flag = False
         # either use a given function as STDP kernel, or the one in the paper
         self.stdp_kernel = self.default_stdp_kernel if stdp_kernel is None else stdp_kernel
@@ -45,8 +45,8 @@ class Network:
         # self.delta_k_long = -self.A_p * self.tao_p - self.A_m * self.tao_m + self.__overall_int_of_k
         self.delta_k_long = quad(self.kl_kernel, -np.inf, np.inf)[0]
         self.find_f()
-        self.coef[Network.EXPLICIT] = self.gamma * (
-                self.b ** 2) * self.N * (self.A_p * self.tao_p + self.A_m * self.tao_m + self.delta_k_long)
+        self.coef[Network.EXPLICIT] = 10  # self.gamma * (
+        # self.b ** 2) * self.N * (self.A_p * self.tao_p + self.A_m * self.tao_m + self.delta_k_long)
         self.W = np.sum(self.coef[:, np.newaxis, np.newaxis] * self.P, axis=0)
 
     # def get_noise_level(self):

@@ -16,7 +16,7 @@ networkF = net.Network(1024, 2, 2, -1.2, 0.1, 9000., 50, 100, 5, 2e3, 0.1118, se
 # %%
 # first_W_F = networkF.W.copy()
 
-coefs_F, delta_u_F = networkF.run_first_phase(with_noise=True,LIMIT=1000)
+coefs_F, delta_u_F = networkF.run_first_phase(with_noise=True)
 #%%
 plt.figure()
 plt.plot(networkF.coef_history, label='F')
