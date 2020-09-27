@@ -8,7 +8,7 @@ class Network:
     EXPLICIT = 0
     WIDTH = 1000
 
-    def __init__(self, N, p, A_p, A_m, g, gamma, F, tao_p=50, tao_m=100, tao=5, tao_0=2 * 1e5, noise=None,
+    def __init__(self, N, p, A_p, A_m, g, gamma, tao_p=50, tao_m=100, tao=5, tao_0=2 * 1e5, noise=None,
                  stdp_kernel=None, seed=None):
         # initializing parameters
         self.N = N
@@ -16,14 +16,14 @@ class Network:
         self.A_p = A_p
         self.A_m = A_m
         self.g = g
-        self.F = F
         self.gamma = gamma
         self.tao_p = tao_p
         self.tao_m = tao_m
         self.tao = tao
         self.tao_0 = tao_0
         self.noise = noise
-        self.dt = 1e-1
+        self.dt = 2.5
+        self.second_phase_flag = False
         # either use a given function as STDP kernel, or the one in the paper
         self.stdp_kernel = self.default_stdp_kernel if stdp_kernel is None else stdp_kernel
         self.current_time = 0.
@@ -46,7 +46,7 @@ class Network:
         self.delta_k_long = quad(self.kl_kernel, -np.inf, np.inf)[0]
         self.find_f()
         self.coef[Network.EXPLICIT] = self.gamma * (
-                self.b ** 2) * self.N * (self.A_p * self.tao_p + self.A_m * self.tao_m + 20)
+                self.b ** 2) * self.N * (self.A_p * self.tao_p + self.A_m * self.tao_m + self.delta_k_long)
         self.W = np.sum(self.coef[:, np.newaxis, np.newaxis] * self.P, axis=0)
 
     def init_memory_patterns(self):
@@ -77,7 +77,7 @@ class Network:
     def find_f(self):
         self.b = fsolve(
             lambda b: self.gamma * (b ** 2) * (self.A_m * self.tao_m + self.A_p * self.tao_p + self.delta_k_long) - 1,
-            100.)[0]
+            100.)[0]  # TODO: make sure this is the correct linearization
         self.f = self.memory_patterns[Network.EXPLICIT] * self.b
 
     def run_second_stage(self):
@@ -107,43 +107,44 @@ class Network:
 
     def run_first_phase(self, LIMIT=None, with_noise=False):
         if LIMIT is None:
-            LIMIT = int(self.tao_0 * 4) / self.dt
+            LIMIT = int(self.tao_0 * 5) / self.dt
         print(f"LIMIT={LIMIT}")
-        delta_u = np.full((1, self.N), 0)
-        coefs = np.zeros((1, self.P.shape[0]))
-        coefs[0, :] = self.coef
-        i = 0
-        coef_diff = np.inf
-        while i < LIMIT:
-            delta_u = np.vstack(
-                [delta_u, delta_u[-1, :] + self.dt * self.delta_u_dynamics(delta_u[-1], self.current_time,
-                                                                           with_noise=with_noise)])
-            self.W += self.dt * self.w_dynamics(delta_u, self.current_time)
+        if self.coef_history is None:
+            self.delta_u = np.full((1, self.N), 0)
+            self.coef_history = np.zeros((1, self.P.shape[0]))
+            self.coef_history[0, :] = self.coef
+        for _ in tqdm(range(int(LIMIT))):
+            self.delta_u = np.vstack(
+                [self.delta_u,
+                 self.delta_u[-1, :] + self.dt * self.delta_u_dynamics(self.delta_u[-1], self.current_time,
+                                                                       with_noise=with_noise)])
+            self.W += self.dt * self.w_dynamics(self.delta_u, self.current_time)
             self.current_time += self.dt
-            i += 1
-            coefs = np.vstack([coefs, self.P[:, 0, :] @ self.W[:, 0] / self.P[:, 0, 0]])
-            coef_diff = coefs[i, Network.EXPLICIT] - coefs[i - 1, Network.EXPLICIT]
-            if i % 100 == 0:
-                print(i)
-        self.coef[:] = coefs[i, :]
-        return coefs, delta_u
+            self.coef_history = np.vstack([self.coef_history, self.P[:, 0, :] @ self.W[:, 0] / self.P[:, 0, 0]])
+        self.coef[:] = self.coef_history[-1, :]
+        return self.coef_history.copy(), self.delta_u.copy()
 
     def run_second_phase(self, min_pattern_strength, max_pattern_strength, with_noise=False, max_time=None,
                          explicit_pattern=None):
+        if not self.second_phase_flag:
+            self.second_phase_flag = True
+            self.coef_history = None
+            self.delta_u = None
+            self.current_time = 0
         if max_time is None:
             max_time = 10000
         max_iteration = int(max_time / self.dt)
         if explicit_pattern is None:
             explicit_pattern = Network.EXPLICIT
         if self.coef_history is None:
-            self.coef_history = np.zeros((max_iteration + 1, self.P.shape[0]))
-            self.coef_history[0, :] = self.coef
-            iteration_range = range(1, max_iteration)
             self.coef[np.arange(self.p) != explicit_pattern] = np.random.uniform(min_pattern_strength,
                                                                                  max_pattern_strength,
                                                                                  self.p - 1)
+            self.coef_history = np.zeros((max_iteration + 1, self.P.shape[0]))
+            self.coef_history[0, :] = self.coef
+            iteration_range = range(1, max_iteration)
             self.W = np.sum(self.coef[:, np.newaxis, np.newaxis] * self.P, axis=0)
-            self.delta_u = np.random.normal(0, self.noise, (1,self.N))
+            self.delta_u = np.random.normal(0, self.noise, (1, self.N)) if with_noise else np.zeros((1, self.N))
         else:
             first_row_index = self.coef_history.shape[0]
             self.coef_history = np.vstack([self.coef_history, np.zeros((max_iteration + 1, self.P.shape[0]))])

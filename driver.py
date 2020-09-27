@@ -4,11 +4,12 @@ from time import time
 import matplotlib.pylab as plt
 import scipy.linalg as linalg
 from importlib import reload
-#%%
+
+# %%
 reload(net)
 # %%
 # networkS = NetworkSlow(32, 4, 2, -1.2, 0.1, 9000e-1, np.tanh, 50, 100, 5, 2e5, 0.1118, seed=97)
-networkF = net.Network(8, 2, 2, -1.2, 0.1, 1, np.tanh, 5, 10, .5, 500, 1.1118, seed=97)
+networkF = net.Network(16, 2, 2, -1.2, 0.1, 9000., 50, 100, 5, 2e4, 0.1118, seed=97)
 
 # %%
 # first_W_F = networkF.W.copy()
@@ -19,8 +20,8 @@ plt.figure()
 plt.plot(coefs_F, label='F')
 plt.legend()
 # %%
-coefs2, delta_u2 = networkF.run_second_phase(70, 71, True, 1000)
-#%%
+coefs2, delta_u2 = networkF.run_second_phase(9, 9.5, True, 2000)
+# %%
 plt.figure()
 plt.plot(networkF.coef_history, label='F')
 plt.legend()
@@ -71,3 +72,32 @@ plt.plot(x, kernel)
 from scipy.integrate import quad
 
 integ = quad(lambda t: network.stdp_kernel(t), -2500, 2500)[0]
+
+# %%
+g = 0.1
+xi = 0.1118
+gamma = 1 / 9000.
+Am = -1.2
+Ap = 2
+tao_m = 100
+tao_p = 50
+tao0 = 2e5
+
+# %%
+c = np
+
+
+# %%
+def default_stdp_kernel(delta_t):
+    A = np.full_like(delta_t, Am)
+    tao_arr = np.full_like(delta_t, tao_m)
+    negative = delta_t < 0
+    A[negative] = Ap
+    tao_arr[negative] = tao_p
+    return A * np.exp(-np.abs(delta_t) / tao_arr)
+
+
+a = np.arange(-100, 100, 0.1)
+b = default_stdp_kernel(a)
+plt.figure()
+plt.plot(a, b)
