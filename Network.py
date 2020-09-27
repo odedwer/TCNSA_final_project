@@ -43,6 +43,7 @@ class Network:
 
         self.__overall_int_of_k = 10
         # self.delta_k_long = -self.A_p * self.tao_p - self.A_m * self.tao_m + self.__overall_int_of_k
+        self.delta_k_long_calc = quad(self.kl_kernel_for_calc, -np.inf, np.inf)[0]
         self.delta_k_long = quad(self.kl_kernel, -np.inf, np.inf)[0]
         self.find_f()
         self.coef[Network.EXPLICIT] = 10  # self.gamma * (
@@ -72,18 +73,16 @@ class Network:
         return A * np.exp(-np.abs(delta_t) / tao_arr) + self.kl_kernel(delta_t)
 
     def kl_kernel(self, delta_t):
+        return (20+1e-11) * (np.exp(
+            -np.abs(delta_t) / np.abs(self.A_m * self.tao_m + self.A_p * self.tao_p)) / self.delta_k_long_calc)
+
+    def kl_kernel_for_calc(self, delta_t):
         return np.exp(-np.abs(delta_t) / np.abs(self.A_m * self.tao_m + self.A_p * self.tao_p))
-
-    def pre_first_stdp_kernel(self, delta_t):
-        return self.A_p * np.exp(delta_t / self.tao_p)
-
-    def post_first_stdp_kernel(self, delta_t):
-        return self.A_m * np.exp(-delta_t / self.tao_m)
 
     def find_f(self):
         self.b = fsolve(
             lambda b: self.gamma * (b ** 3) * (self.A_m * self.tao_m + self.A_p * self.tao_p + self.delta_k_long) - 1,
-            100.)[0]  # TODO: make sure this is the correct linearization
+            200.)[0]  # TODO: make sure this is the correct linearization
         self.f = self.memory_patterns[Network.EXPLICIT] * self.b
 
     def run_second_stage(self):

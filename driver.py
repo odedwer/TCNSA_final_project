@@ -6,7 +6,7 @@ import scipy.linalg as linalg
 from importlib import reload
 from email_by_demand import send_mail
 import warnings
-warnings.filterwarnings("error")
+# warnings.filterwarnings("error")
 # %%
 reload(net)
 # %%
@@ -16,7 +16,7 @@ networkF = net.Network(1024, 2, 2, -1.2, 0.1, 9000., 50, 100, 5, 2e3, 0.1118, se
 # %%
 # first_W_F = networkF.W.copy()
 
-coefs_F, delta_u_F = networkF.run_first_phase(with_noise=True)
+coefs_F, delta_u_F = networkF.run_first_phase(with_noise=False,LIMIT=1000)
 #%%
 plt.figure()
 plt.plot(networkF.coef_history, label='F')
