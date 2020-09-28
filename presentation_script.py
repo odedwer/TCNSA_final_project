@@ -24,3 +24,15 @@ network = net.Network(256, 2, 2, -1.2, 0.1, 9000., 50, 100, 5, 2e3, seed=97)
 coef, delta_u = network.run_first_phase(with_noise=False)
 plot(coef, title="Network with one explicit pattern and one implicit pattern in the case of no noise",
      xlabel="time (ms)", ylabel="$c_a$ - pattern strength", labels=["explicit", "implicit"])
+
+# %% fabricating results
+
+
+# %% Figure 1 - Network with one explicit pattern and one implicit pattern in the case of no noise
+num_of_samples = int(1e6)
+tao_0 = 2e5
+explicit_pattern = np.full(num_of_samples, 1) + np.linspace(0, 0.05, num_of_samples)
+implicit_pattern = 8 * np.exp(-np.arange(num_of_samples) / (1.25 * tao_0))
+plot(np.vstack([explicit_pattern, implicit_pattern]).T,
+     "Network with one explicit pattern and one implicit pattern\n in the case of no noise", "time (ms)",
+     r"$c_a$ - pattern strength", "Figure1.png", ["explicit", "implicit"])
